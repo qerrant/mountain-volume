@@ -1,0 +1,19 @@
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: clip;
+}
+
+#infoPanel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #4ac9ff;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  border: solid white;
+  pointer-events: none; /* Ensure that the panel doesn't interfere with mouse events */
+}
+
