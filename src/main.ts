@@ -2,6 +2,10 @@ import './style.css'
 import { PCFSoftShadowMap, BufferGeometry, BufferAttribute, AmbientLight, Scene, PerspectiveCamera, WebGLRenderer, PlaneGeometry, MeshStandardMaterial, MeshBasicMaterial, Mesh, DirectionalLight, Vector3 } from "three";
 import { OrbitControls } from "three-stdlib";
 
+interface ICalc {
+  (A: Vector3, B: Vector3, C: Vector3): number
+}
+
 // parameters
 const PLANE_WIDTH = 10;
 const PLANE_HEIGHT = 5;
@@ -21,7 +25,6 @@ const renderer: WebGLRenderer = new WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000000);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.cullFrontFaces = false;
 renderer.shadowMap.type = PCFSoftShadowMap;
 
 document.body.appendChild(renderer.domElement);
@@ -98,9 +101,6 @@ directionalLight.position.set(15, 15, 15);
 directionalLight.castShadow = true;
 scene.add(directionalLight);
 
-directionalLight.shadowMapWidth = 512;
-directionalLight.shadowMapHeight = 512;
-
 const ambientLight = new AmbientLight(0xa7a7a7);
 scene.add(ambientLight);
 
@@ -121,7 +121,7 @@ const resize = () => {
 window.addEventListener("resize", resize);
 
 // calculations
-const calcAreaOfTriangle = (A: Vector3, B: Vector3, C: Vector3): number => {
+const calcAreaOfTriangle: ICalc = (A: Vector3, B: Vector3, C: Vector3): number => {
   const AB = new Vector3();
   AB.subVectors(B, A);
 
@@ -134,7 +134,7 @@ const calcAreaOfTriangle = (A: Vector3, B: Vector3, C: Vector3): number => {
   return 0.5 * N.length();
 }
 
-const calcVolumeOfPrism = (A: Vector3, B: Vector3, C: Vector3): number => {
+const calcVolumeOfPrism: ICalc = (A: Vector3, B: Vector3, C: Vector3): number => {
   const zeroA = new Vector3(A.x, A.y, 0);
   const zeroB = new Vector3(B.x, B.y, 0);
   const zeroC = new Vector3(C.x, C.y, 0);
@@ -142,32 +142,26 @@ const calcVolumeOfPrism = (A: Vector3, B: Vector3, C: Vector3): number => {
   return (A.z + B.z + C.z) / 3 * area;
 }
 
-const planeIdxs = plane.geometry.index.array;
-let areaOfSurface = 0;
-let volume = 0;
+const calcForAllTriangles = (idxs: number[], func: ICalc): number => {
+  let result = 0;
 
-for (let i = 0; i < planeIdxs.length; i+=3) {
-  const A = new Vector3(vertices[planeIdxs[i] * 3], vertices[planeIdxs[i] * 3 + 1], vertices[planeIdxs[i] * 3 + 2]);
-  const B = new Vector3(vertices[planeIdxs[i + 1] * 3], vertices[planeIdxs[i + 1] * 3 + 1], vertices[planeIdxs[i + 1] * 3 + 2]);
-  const C = new Vector3(vertices[planeIdxs[i + 2] * 3], vertices[planeIdxs[i + 2] * 3 + 1], vertices[planeIdxs[i + 2] * 3 + 2]);
+  for (let i = 0; i < idxs.length; i+=3) {
+    const A = new Vector3(vertices[idxs[i] * 3], vertices[idxs[i] * 3 + 1], vertices[idxs[i] * 3 + 2]);
+    const B = new Vector3(vertices[idxs[i + 1] * 3], vertices[idxs[i + 1] * 3 + 1], vertices[idxs[i + 1] * 3 + 2]);
+    const C = new Vector3(vertices[idxs[i + 2] * 3], vertices[idxs[i + 2] * 3 + 1], vertices[idxs[i + 2] * 3 + 2]);
   
-  areaOfSurface += calcAreaOfTriangle(A, B, C);
-  volume += calcVolumeOfPrism(A, B, C);  
-}
+    result += func(A, B, C);
+  }
 
-const sideIdxs = sideMesh.geometry.index.array;
-let areaOfSide = 0;
+  return result;
+};
 
-for (let i = 0; i < sideIdxs.length; i+=3) {
-  const A = new Vector3(vertices[sideIdxs[i] * 3], vertices[sideIdxs[i] * 3 + 1], vertices[sideIdxs[i] * 3 + 2]);
-  const B = new Vector3(vertices[sideIdxs[i + 1] * 3], vertices[sideIdxs[i + 1] * 3 + 1], vertices[sideIdxs[i + 1] * 3 + 2]);
-  const C = new Vector3(vertices[sideIdxs[i + 2] * 3], vertices[sideIdxs[i + 2] * 3 + 1], vertices[sideIdxs[i + 2] * 3 + 2]);
-  
-  areaOfSide += calcAreaOfTriangle(A, B, C);
-}
+const volume = plane.geometry.index ? calcForAllTriangles([...new Uint16Array(plane.geometry.index.array)], calcVolumeOfPrism) : 0;
+const areaOfSurface = plane.geometry.index ? calcForAllTriangles([...new Uint16Array(plane.geometry.index.array)], calcAreaOfTriangle) : 0;
+const areaOfSide = sideMesh.geometry.index ? calcForAllTriangles([...new Uint16Array(sideMesh.geometry.index.array)], calcAreaOfTriangle) : 0;
 
 const infoPanel = document.getElementById('infoPanel');
-infoPanel.innerText = `Name: Mountain
+if (infoPanel) infoPanel.innerText = `Name: Mountain
   Volume: ${volume.toFixed(2)} m³
   Area (surface): ${areaOfSurface.toFixed(2)} m²
   Area (side): ${areaOfSide.toFixed(2)} m²
